@@ -1,19 +1,95 @@
 import React, { useEffect, useState } from 'react';
 import { AppView } from '../types';
-import { CheckCircle, Download, Mail, ArrowRight, Sparkles } from 'lucide-react';
+import { CheckCircle, Download, Mail, ArrowRight, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface PaymentSuccessPageProps {
     setView: (view: AppView) => void;
 }
 
 const PaymentSuccessPage: React.FC<PaymentSuccessPageProps> = ({ setView }) => {
-    const [showConfetti, setShowConfetti] = useState(true);
+    const [showConfetti, setShowConfetti] = useState(false);
+    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+    const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
-        // Hide confetti after animation
-        const timer = setTimeout(() => setShowConfetti(false), 3000);
-        return () => clearTimeout(timer);
+        const validatePayment = async () => {
+            try {
+                // Obtener parámetros de la URL (payment_id, etc.)
+                const searchParams = window.location.search;
+                if (!searchParams) {
+                    setStatus('error');
+                    setErrorMessage('No se encontraron datos del pago.');
+                    return;
+                }
+
+                console.log('Validando pago con params:', searchParams);
+
+                // Llamar al backend para validar y ENVIAR EL EMAIL
+                const response = await fetch(`${API_URL}/api/payments/validate/${searchParams}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    setStatus('success');
+                    setShowConfetti(true);
+                    // Ocultar confetti después de un tiempo
+                    setTimeout(() => setShowConfetti(false), 5000);
+                } else {
+                    setStatus('error');
+                    setErrorMessage(data.message || data.error || 'No pudimos validar tu pago.');
+                }
+            } catch (error) {
+                console.error('Error validando pago:', error);
+                setStatus('error');
+                setErrorMessage('Error de conexión al validar el pago.');
+            }
+        };
+
+        validatePayment();
     }, []);
+
+    if (status === 'loading') {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-500">
+                <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
+                <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-green-400">
+                    Verificando tu pago...
+                </h2>
+                <p className="text-gray-400 mt-2">Por favor no cierres esta ventana.</p>
+            </div>
+        );
+    }
+
+    if (status === 'error') {
+        return (
+            <div className="max-w-2xl mx-auto py-12 text-center animate-in zoom-in duration-500">
+                <div className="mb-8 flex justify-center">
+                    <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <AlertCircle size={48} className="text-red-500" />
+                    </div>
+                </div>
+                <h1 className="text-3xl font-bold mb-4">Hubo un problema</h1>
+                <p className="text-red-400 text-lg mb-8 bg-red-500/10 p-4 rounded-xl inline-block">
+                    {errorMessage}
+                </p>
+                <div className="flex justify-center gap-4">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-3 bg-white/10 rounded-xl hover:bg-white/20 transition-all font-bold"
+                    >
+                        Reintentar
+                    </button>
+                    <a
+                        href="mailto:datos.conalex@gmail.com"
+                        className="px-6 py-3 bg-blue-600 rounded-xl hover:bg-blue-500 transition-all font-bold"
+                    >
+                        Contactar Soporte
+                    </a>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="animate-in zoom-in duration-500 max-w-2xl mx-auto py-12 text-center relative">
@@ -58,9 +134,9 @@ const PaymentSuccessPage: React.FC<PaymentSuccessPageProps> = ({ setView }) => {
                 <div className="flex items-center gap-4 p-4 bg-green-500/10 rounded-xl border border-green-500/20">
                     <Mail size={24} className="text-green-500 shrink-0" />
                     <div className="text-left">
-                        <p className="font-bold">Revisá tu email</p>
+                        <p className="font-bold">Email Enviado</p>
                         <p className="text-sm text-gray-400">
-                            En breve recibirás el link de descarga en el email que proporcionaste.
+                            Te acabamos de enviar el archivo a tu correo. Revisá también Spam por las dudas.
                         </p>
                     </div>
                 </div>
