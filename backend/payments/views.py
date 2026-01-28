@@ -86,8 +86,8 @@ def create_preference(request):
                 "failure": f"{FRONTEND_URL}/pago-fallido",
                 "pending": f"{FRONTEND_URL}/pago-pendiente",
             },
-            # auto_return solo funciona con URLs públicas (no localhost)
-            **({"auto_return": "approved"} if "localhost" not in FRONTEND_URL else {}),
+            # auto_return SOLO funciona con URLs públicas (https), NO con localhost
+            **({"auto_return": "approved"} if FRONTEND_URL.startswith("https") else {}),
             "external_reference": str(temp_order_id),
             "statement_descriptor": "ALEXCEL",
             "payer": {
