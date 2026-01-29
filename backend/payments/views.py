@@ -174,17 +174,18 @@ def pago_exitoso(request):
             return JsonResponse({'success': False, 'error': 'Error de conexión'}, status=502)
 
         if status == 'approved':
-            # ENVIAR EMAIL (DESACTIVADO TEMPORALMENTE PARA DEBUG)
-            email_sent = True # Simulamos éxito
+            # ENVIAR EMAIL (Restaurado con protección)
+            email_sent = False
             email_error = None
-            """
+            
             if fake_order.email:
                 try:
+                    logger.info(f"Intentando enviar email a {fake_order.email}...")
                     email_sent = send_product_email(fake_order)
                 except Exception as email_ex:
-                    logger.exception(f"Error enviando email: {email_ex}")
+                    logger.error(f"CRITICAL EMAIL ERROR: {str(email_ex)}")
                     email_error = str(email_ex)
-            """
+                    # No relanzamos la excepción para que el usuario reciba success: true
             
             return JsonResponse({
                 'success': True,
