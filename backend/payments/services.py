@@ -110,5 +110,7 @@ def send_product_email(order: Order) -> bool:
         return True
 
     except Exception as e:
+        # Debug directo a consola para Railway
+        print(f"!!!! RESEND ERROR !!!!: {str(e)}")
         logger.error(f"[EMAIL ERROR] Fallo al enviar con Resend: {str(e)}")
         return False
