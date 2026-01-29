@@ -87,6 +87,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     # Producción Vercel
+    "https://datos-con-alex.vercel.app",
     "https://alexcel-three.vercel.app",
     "https://alexcel.vercel.app",
 ]
