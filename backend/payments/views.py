@@ -174,17 +174,23 @@ def pago_exitoso(request):
             return JsonResponse({'success': False, 'error': 'Error de conexión'}, status=502)
 
         if status == 'approved':
-            # ENVIAR EMAIL
+            # ENVIAR EMAIL (wrapped in try/except to not crash)
             email_sent = False
+            email_error = None
             if fake_order.email:
-                email_sent = send_product_email(fake_order)
+                try:
+                    email_sent = send_product_email(fake_order)
+                except Exception as email_ex:
+                    logger.exception(f"Error enviando email: {email_ex}")
+                    email_error = str(email_ex)
             
             return JsonResponse({
                 'success': True,
                 'status': 'approved',
                 'payment_id': payment_id,
                 'email_sent': email_sent,
-                'message': '¡Pago exitoso! Te enviamos un email con la descarga.'
+                'email_error': email_error,
+                'message': '¡Pago exitoso!' if email_sent else '¡Pago exitoso! Hubo un problema enviando el email, contactanos.'
             })
         else:
             return JsonResponse({
