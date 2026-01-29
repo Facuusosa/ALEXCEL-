@@ -6,25 +6,24 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-# Mapeo de product_id a archivo
+# Mapeo de product_id a archivos (puede ser uno o varios)
 PRODUCT_FILES = {
-    'tracker-habitos': 'tracker-habitos.xlsx',
-    'planificador-financiero': 'planificador-financiero.xlsx',
-    'pack-productividad': 'pack-productividad.zip',  # Contiene ambos archivos
+    'tracker-habitos': ['tracker-habitos.xlsx'],
+    'planificador-financiero': ['planificador-financiero.xlsx'],
+    'pack-productividad': ['tracker-habitos.xlsx', 'planificador-financiero.xlsx'],  # AMBOS archivos
 }
 
-def get_product_file_path(product_id: str) -> str:
+def get_product_files(product_id: str) -> list:
     """
-    Retorna la ruta al archivo del producto según su ID.
-    Si no existe, usa un archivo genérico de prueba.
+    Retorna lista de rutas a los archivos del producto según su ID.
     """
-    filename = PRODUCT_FILES.get(product_id, 'demo-product.xlsx')
-    return os.path.join(settings.BASE_DIR, 'files', filename)
+    filenames = PRODUCT_FILES.get(product_id, ['demo-product.xlsx'])
+    return [os.path.join(settings.BASE_DIR, 'files', f) for f in filenames]
 
 
 def send_product_email(order: Order) -> bool:
     """
-    Envía el email automatizado con el producto adjunto usando RESEND SDK.
+    Envía el email automatizado con el/los producto(s) adjunto(s) usando RESEND SDK.
     
     Args:
         order (Order): Orden aprobada con datos del cliente.
@@ -39,16 +38,14 @@ def send_product_email(order: Order) -> bool:
             logger.error("Falta RESEND_API_KEY en variables de entorno")
             return False
             
-        # 1. Definir Ruta del Archivo
-        file_path = get_product_file_path(order.course_id)
-        file_exists = os.path.exists(file_path)
-        
-        # En Railway el filesystem es read-only, no intentamos crear archivos si no existen
-        if not file_exists:
-            logger.warning(f"[EMAIL] Archivo no encontrado: {file_path}")
+        # 1. Obtener archivos del producto
+        file_paths = get_product_files(order.course_id)
         
         # 2. Template del Email
         subject = f"🎉 Tu compra: {order.course_title} - Datos con Alex"
+        
+        # Texto dinámico según cantidad de archivos
+        archivo_texto = "los archivos adjuntos" if len(file_paths) > 1 else "el archivo adjunto"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -70,7 +67,7 @@ def send_product_email(order: Order) -> bool:
                 <div class="content">
                     <p>Hola <strong>{order.first_name}</strong>,</p>
                     <p>Tu pago por <strong>{order.course_title}</strong> ha sido confirmado.</p>
-                    <p>Adjunto a este correo encontrarás el archivo para descargar.</p>
+                    <p>Adjunto a este correo encontrarás {archivo_texto} para descargar.</p>
                     <p>Si tienes alguna duda, responde a este correo.</p>
                 </div>
             </div>
@@ -78,39 +75,39 @@ def send_product_email(order: Order) -> bool:
         </html>
         """
         
-        # 3. Preparar adjuntos
+        # 3. Preparar adjuntos (MÚLTIPLES si es pack)
         attachments = []
-        if file_exists:
-            try:
-                with open(file_path, "rb") as f:
-                    # Convertir bytes a lista de enteros para Resend
-                    attachment_content = list(f.read())
-                
-                attachments.append({
-                    "filename": os.path.basename(file_path),
-                    "content": attachment_content
-                })
-                logger.info(f"[EMAIL] Archivo leído para adjuntar: {file_path}")
-            except Exception as e:
-                logger.error(f"[EMAIL] Error leyendo archivo: {e}")
+        for file_path in file_paths:
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, "rb") as f:
+                        attachment_content = list(f.read())
+                    
+                    attachments.append({
+                        "filename": os.path.basename(file_path),
+                        "content": attachment_content
+                    })
+                    logger.info(f"[EMAIL] Archivo adjuntado: {file_path}")
+                except Exception as e:
+                    logger.error(f"[EMAIL] Error leyendo archivo {file_path}: {e}")
+            else:
+                logger.warning(f"[EMAIL] Archivo no encontrado: {file_path}")
         
         # 4. Enviar con Resend
-        # IMPORTANTE: free tier solo envía desde onboarding@resend.dev
         params = {
             "from": "Datos con Alex <onboarding@resend.dev>",
             "to": [order.email],
             "subject": subject,
             "html": html_content,
-            "reply_to": "datos.conalex@gmail.com", # Tu email real
+            "reply_to": "facundososa98@hotmail.com",
             "attachments": attachments
         }
         
         r = resend.Emails.send(params)
-        logger.info(f"[EMAIL SUCCESS] Resend ID: {r.get('id')}")
+        logger.info(f"[EMAIL SUCCESS] Resend ID: {r.get('id')} - Adjuntos: {len(attachments)}")
         return True
 
     except Exception as e:
-        # Debug directo a consola para Railway
         print(f"!!!! RESEND ERROR !!!!: {str(e)}")
         logger.error(f"[EMAIL ERROR] Fallo al enviar con Resend: {str(e)}")
         return False
