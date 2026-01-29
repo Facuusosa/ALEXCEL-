@@ -4,6 +4,7 @@ URLs para el módulo de pagos con Mercado Pago
 
 from django.urls import path
 from . import views
+from . import views_debug
 
 app_name = 'payments'
 
@@ -23,4 +24,6 @@ urlpatterns = [
     # POST /api/payments/webhook/
     # Recibe notificaciones de Mercado Pago
     path('webhook/', views.webhook, name='webhook'),
+    path('health/', views_debug.health_check),
+    path('env-check/', views_debug.env_check),
 ]

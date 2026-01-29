@@ -86,6 +86,10 @@ def create_preference(request):
                 "failure": f"{FRONTEND_URL}/pago-fallido",
                 "pending": f"{FRONTEND_URL}/pago-pendiente",
             },
+            # DEBUG CRITICO
+            # logger.info(f"Using FRONTEND_URL: {FRONTEND_URL}")
+            # logger.info(f"Back URLs: {FRONTEND_URL}/pago-exitoso")
+            
             # auto_return SIEMPRE activo (Forzado para resolver problemas de redirección)
             "auto_return": "approved",
             "external_reference": str(temp_order_id),
