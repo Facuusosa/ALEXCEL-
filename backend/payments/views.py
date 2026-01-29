@@ -163,10 +163,14 @@ def pago_exitoso(request):
             metadata = payment_data.get("metadata", {})
             
             # Reconstruir objeto 'fake order' para el servicio de email
+            # TRUCO TEMPORAL: Forzar email a tu cuenta Resend para pruebas
+            # TODO: Quitar esto antes de ir a producción real
+            TEST_EMAIL_OVERRIDE = "facundososa98@hotmail.com"
+            
             fake_order = SimpleNamespace(
                 id=payment_data.get("external_reference", "000"),
                 first_name=metadata.get("customer_first_name", "Cliente"),
-                email=metadata.get("customer_email", ""),
+                email=TEST_EMAIL_OVERRIDE,  # Original: metadata.get("customer_email", "")
                 course_title=metadata.get("course_title", "Producto Digital"),
                 course_id=metadata.get("course_id", "tracker-habitos"),
                 price=metadata.get("price", 0),
