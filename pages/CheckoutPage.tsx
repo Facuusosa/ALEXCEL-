@@ -8,14 +8,22 @@ import { ShieldCheck, ChevronLeft, CheckCircle, CreditCard, User, Mail, Loader2,
  * CHECKOUT PAGE - MERCADO PAGO INTEGRATION
  * ============================================================================
  * 
- * Flujo seguro de pago con registro de usuario en base de datos.
+ * Flujo seguro de pago con registro de usuario en metadata de MP (stateless).
  * Soporta compra de planillas individuales y ofertas/packs.
+ * 
+ * PRODUCCIÓN: Usa init_point de Mercado Pago
+ * DESARROLLO: Usa sandbox_init_point
  * 
  * ============================================================================
  */
 
-// TEMPORAL: URL hardcodeada para producción (la variable de entorno no funciona bien en Vercel)
-const API_URL = 'https://alexcel-backend-production.up.railway.app';
+// API URL dinámico según el entorno
+// En producción (Vercel), VITE_API_URL debería estar configurado
+// En desarrollo local, usa el backend de Railway o localhost
+const API_URL = import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? 'https://alexcel-backend-production.up.railway.app'  // PRODUCCIÓN
+    : 'http://localhost:8000');  // DESARROLLO LOCAL
 
 interface CheckoutPageProps {
   setView: (view: AppView) => void;
@@ -108,6 +116,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ setView, planillaId, oferta
     setError(null);
 
     try {
+      console.log(`[Checkout] Enviando a ${API_URL}/api/payments/create-preference/`);
+
       const response = await fetch(`${API_URL}/api/payments/create-preference/`, {
         method: 'POST',
         headers: {
@@ -117,7 +127,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ setView, planillaId, oferta
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           document: document.trim(),
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           course_id: productData.id,
           title: productData.title,
           price: productData.finalPrice,
@@ -126,17 +136,19 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({ setView, planillaId, oferta
       });
 
       const data = await response.json();
+      console.log('[Checkout] Respuesta:', data);
 
-      if (data.success && (data.init_point || data.sandbox_init_point)) {
-        const redirectUrl = data.sandbox_init_point || data.init_point;
-        window.location.href = redirectUrl;
+      if (data.success && data.init_point) {
+        // PRODUCCIÓN: El backend ya envía el init_point correcto según el entorno
+        console.log('[Checkout] Redirigiendo a Mercado Pago...', data.init_point);
+        window.location.href = data.init_point;
       } else {
         setError(data.error || 'Error al crear la preferencia de pago');
         setIsLoading(false);
       }
     } catch (err) {
-      console.error('Error:', err);
-      setError('Error de conexión. Verificá que el backend esté corriendo.');
+      console.error('[Checkout] Error:', err);
+      setError('Error de conexión. Por favor intentá de nuevo.');
       setIsLoading(false);
     }
   };

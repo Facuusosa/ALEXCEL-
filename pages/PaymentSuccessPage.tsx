@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { AppView } from '../types';
 import { CheckCircle, Download, Mail, ArrowRight, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 
-// TEMPORAL: URL hardcodeada para producción
-const API_URL = 'https://alexcel-backend-production.up.railway.app';
+// API URL dinámico según el entorno
+const API_URL = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD
+        ? 'https://alexcel-backend-production.up.railway.app'
+        : 'http://localhost:8000');
 
 interface PaymentSuccessPageProps {
     setView: (view: AppView) => void;
