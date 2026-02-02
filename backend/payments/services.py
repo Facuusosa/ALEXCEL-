@@ -38,7 +38,7 @@ PRODUCT_FILES = {
 # Configuración del remitente
 # PRODUCCIÓN: Cuando tengas dominio verificado, cambiar a tu email
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Datos con Alex")
-EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", "onboarding@resend.dev")
+EMAIL_FROM_ADDRESS = os.getenv("DEFAULT_FROM_EMAIL", "facundososa98@hotmail.com")
 EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "datos.conalex@gmail.com")
 
 
@@ -161,11 +161,10 @@ def send_product_email(order) -> bool:
             except Exception as e:
                 logger.error(f"[EMAIL] Error leyendo archivo {file_path}: {e}")
         
-        # Verificar que tengamos al menos un archivo
+        # Verificar que tengamos al menos un archivo (REQ: Fail hard)
         if not attachments:
-            logger.error(f"[EMAIL] CRÍTICO: No hay archivos para adjuntar para producto {order.course_id}")
-            # Decidir: ¿enviar email sin adjuntos o fallar?
-            # Por seguridad, fallamos - el cliente debe recibir el producto
+            msg = f"[EMAIL] CRÍTICO: No hay archivos válidos para adjuntar (Prod: {order.course_id}). Abortando envío."
+            logger.critical(msg)
             return False
         
         # =========================================
@@ -255,41 +254,47 @@ def send_product_email(order) -> bool:
 </html>
 """
 
-        # =========================================
-        # 5. ENVIAR CON RESEND
-        # =========================================
-        from_address = f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>"
-        
-        params = {
-            "from": from_address,
-            "to": [order.email],
-            "subject": f"🎉 Tu compra: {order.course_title} - Datos con Alex",
-            "html": html_content,
-            "reply_to": EMAIL_REPLY_TO,
-            "attachments": attachments
-        }
-        
-        logger.info(f"[EMAIL] Enviando a {order.email} desde {from_address}...")
-        
-        response = resend.Emails.send(params)
-        
-        # Verificar respuesta
-        email_id = response.get('id') if isinstance(response, dict) else None
-        
-        if email_id:
-            logger.info(f"[EMAIL] ✓ ÉXITO - Resend ID: {email_id} | To: {order.email} | Adjuntos: {len(attachments)}")
-            return True
-        else:
-            logger.error(f"[EMAIL] Respuesta inesperada de Resend: {response}")
-            return False
-
-    except resend.exceptions.ResendError as e:
-        logger.error(f"[EMAIL] Error de Resend API: {str(e)}")
-        return False
-        
     except Exception as e:
         logger.exception(f"[EMAIL] Error inesperado enviando email: {str(e)}")
         return False
+
+        # =========================================
+        # 5. ENVIAR CON DJANGO SMTP (GMAIL)
+        # =========================================
+        from django.core.mail import EmailMessage
+        
+        try:
+            logger.info(f"[EMAIL] Iniciando envío SMTP a {order.email}...")
+            
+            email = EmailMessage(
+                subject=f"🎉 Tu compra: {order.course_title} - Datos con Alex",
+                body=html_content,
+                from_email=f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>",
+                to=[order.email],
+                reply_to=[EMAIL_REPLY_TO],
+            )
+            
+            # Configurar como HTML
+            email.content_subtype = "html"
+            
+            # Agregar adjuntos
+            for file_path in file_paths:
+                if os.path.exists(file_path):
+                    email.attach_file(file_path)
+            
+            # Enviar
+            sent_count = email.send(fail_silently=False)
+            
+            if sent_count > 0:
+                logger.info(f"[EMAIL] ✓ ÉXITO - SMTP | To: {order.email} | Adjuntos: {len(file_paths)}")
+                return True
+            else:
+                logger.error("[EMAIL] El servidor SMTP no envió el correo (count=0)")
+                return False
+                
+        except Exception as e:
+            logger.exception(f"[EMAIL] Error SMTP enviando email: {str(e)}")
+            return False
 
 
 # =============================================================================
