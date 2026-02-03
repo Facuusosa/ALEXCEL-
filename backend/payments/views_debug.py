@@ -9,44 +9,48 @@ IMPORTANTE: En producción, considerar restringir acceso a estos endpoints.
 
 from django.http import JsonResponse
 from django.conf import settings
+from django.core.mail import EmailMessage
 import os
 import logging
+from typing import Any
 
-from .services import test_resend_connection, list_available_products, validate_product_files
+from .services import test_email_connection, list_available_products, validate_product_files
 
 logger = logging.getLogger(__name__)
 
 
-def health_check(request):
+def health_check(request) -> JsonResponse:
     """
     Verificación básica de que el backend está corriendo.
     GET /api/payments/health/
     """
-    mp_token = os.getenv('MP_ACCESS_TOKEN', '')
+    mp_token = os.environ.get('MP_ACCESS_TOKEN', '')
     is_production = mp_token.startswith('APP_USR-')
     
     return JsonResponse({
         "status": "ok",
         "message": "Backend running - Datos con Alex",
+        "email_service": "Gmail SMTP",
         "production_mode": is_production,
         "token_type": "production" if is_production else "sandbox/test"
     })
 
 
-def env_check(request):
+def env_check(request) -> JsonResponse:
     """
     Verificación de variables de entorno configuradas.
     GET /api/payments/env-check/
     
     Útil para diagnosticar problemas de configuración en Railway.
     """
-    mp_token = os.getenv('MP_ACCESS_TOKEN', '')
-    resend_key = os.getenv('RESEND_API_KEY', '')
-    frontend_url = os.getenv('FRONTEND_URL', 'Not Set')
+    mp_token = os.environ.get('MP_ACCESS_TOKEN', '')
+    email_user = os.environ.get('EMAIL_HOST_USER', '')
+    email_pass = os.environ.get('EMAIL_HOST_PASSWORD', '')
+    frontend_url = os.environ.get('FRONTEND_URL', 'Not Set')
     
     return JsonResponse({
         "environment": {
-            "DEBUG": os.getenv('DEBUG', 'Not Set'),
+            "DEBUG": os.environ.get('DEBUG', 'Not Set'),
             "FRONTEND_URL": frontend_url,
         },
         "mercado_pago": {
@@ -54,21 +58,22 @@ def env_check(request):
             "token_prefix": mp_token[:15] + "..." if len(mp_token) > 15 else "Too short",
             "is_production": mp_token.startswith('APP_USR-'),
         },
-        "email_resend": {
-            "api_key_configured": bool(resend_key),
-            "api_key_prefix": resend_key[:10] + "..." if len(resend_key) > 10 else "Not Set",
-            "from_name": os.getenv('EMAIL_FROM_NAME', 'Datos con Alex'),
-            "from_address": os.getenv('EMAIL_FROM_ADDRESS', 'onboarding@resend.dev'),
-            "reply_to": os.getenv('EMAIL_REPLY_TO', 'datos.conalex@gmail.com'),
+        "email_gmail": {
+            "host": os.environ.get('EMAIL_HOST', 'smtp.gmail.com'),
+            "port": os.environ.get('EMAIL_PORT', '587'),
+            "user_configured": bool(email_user),
+            "user_preview": email_user[:5] + "***" if len(email_user) > 5 else "Not Set",
+            "password_configured": bool(email_pass),
+            "from_email": settings.DEFAULT_FROM_EMAIL,
         },
         "django": {
-            "allowed_hosts": os.getenv('ALLOWED_HOSTS', 'Not Set'),
-            "secret_key_set": bool(os.getenv('DJANGO_SECRET_KEY')),
+            "allowed_hosts": os.environ.get('ALLOWED_HOSTS', 'Not Set'),
+            "secret_key_set": bool(os.environ.get('DJANGO_SECRET_KEY')),
         }
     })
 
 
-def products_check(request):
+def products_check(request) -> JsonResponse:
     """
     Verificación de productos y archivos disponibles.
     GET /api/payments/products-check/
@@ -78,15 +83,13 @@ def products_check(request):
     return JsonResponse(list_available_products())
 
 
-def test_email(request):
+def test_email(request) -> JsonResponse:
     """
-    Prueba de envío de email con Resend.
+    Prueba de envío de email con Gmail SMTP.
     GET /api/payments/test-email/?to=tu@email.com
     
-    NOTA: Solo funciona si RESEND_API_KEY está configurada.
+    NOTA: Requiere EMAIL_HOST_USER y EMAIL_HOST_PASSWORD configurados.
     """
-    import resend
-    
     destinatario = request.GET.get('to')
     if not destinatario:
         return JsonResponse({
@@ -95,41 +98,36 @@ def test_email(request):
         }, status=400)
     
     # Verificar configuración
-    resend_check = test_resend_connection()
-    if not resend_check.get("success"):
+    email_check = test_email_connection()
+    if not email_check.get("config_valid"):
         return JsonResponse({
             "status": "error",
-            "message": "Resend no está configurado",
-            "details": resend_check
+            "message": "Configuración de email inválida",
+            "details": email_check
         }, status=500)
     
     try:
-        resend.api_key = os.getenv("RESEND_API_KEY")
-        
-        from_name = os.getenv('EMAIL_FROM_NAME', 'Datos con Alex')
-        from_address = os.getenv('EMAIL_FROM_ADDRESS', 'onboarding@resend.dev')
-        
-        result = resend.Emails.send({
-            "from": f"{from_name} <{from_address}>",
-            "to": [destinatario],
-            "subject": "🧪 Prueba de Email - Datos con Alex",
-            "html": """
+        email = EmailMessage(
+            subject="🧪 Prueba de Email - Datos con Alex",
+            body="""
                 <div style="font-family: sans-serif; padding: 20px; background: #1a1a1a; color: white; border-radius: 10px;">
                     <h2 style="color: #22c55e;">✅ Email de Prueba Exitoso</h2>
                     <p>Si estás leyendo esto, el sistema de emails funciona correctamente.</p>
-                    <p style="color: #888; font-size: 12px;">Enviado desde el backend de Datos con Alex</p>
+                    <p style="color: #888; font-size: 12px;">Enviado desde el backend de Datos con Alex vía Gmail SMTP</p>
                 </div>
             """,
-            "reply_to": os.getenv('EMAIL_REPLY_TO', 'datos.conalex@gmail.com')
-        })
-        
-        email_id = result.get('id') if isinstance(result, dict) else None
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[destinatario],
+            reply_to=[settings.EMAIL_HOST_USER] if settings.EMAIL_HOST_USER else None
+        )
+        email.content_subtype = "html"
+        email.send(fail_silently=False)
         
         return JsonResponse({
             "status": "ok",
-            "message": f"Email de prueba enviado a {destinatario}",
-            "resend_id": email_id,
-            "from": f"{from_name} <{from_address}>"
+            "message": f"✅ Email de prueba enviado a {destinatario}",
+            "service": "Gmail SMTP",
+            "from": settings.DEFAULT_FROM_EMAIL
         })
         
     except Exception as e:
@@ -141,16 +139,17 @@ def test_email(request):
         }, status=500)
 
 
-def system_status(request):
+def system_status(request) -> JsonResponse:
     """
     Estado completo del sistema.
     GET /api/payments/system-status/
     
     Resumen de todos los checks para verificar que el sistema está listo.
     """
-    mp_token = os.getenv('MP_ACCESS_TOKEN', '')
-    resend_key = os.getenv('RESEND_API_KEY', '')
-    frontend_url = os.getenv('FRONTEND_URL', '')
+    mp_token = os.environ.get('MP_ACCESS_TOKEN', '')
+    email_user = os.environ.get('EMAIL_HOST_USER', '')
+    email_pass = os.environ.get('EMAIL_HOST_PASSWORD', '')
+    frontend_url = os.environ.get('FRONTEND_URL', '')
     
     # Verificar productos
     products = list_available_products()
@@ -162,18 +161,19 @@ def system_status(request):
     # Calcular status general
     checks = {
         "mp_token_production": mp_token.startswith('APP_USR-'),
-        "resend_configured": bool(resend_key),
+        "gmail_user_configured": bool(email_user),
+        "gmail_password_configured": bool(email_pass),
         "frontend_url_set": bool(frontend_url),
         "all_products_ready": all_products_ready,
-        "debug_off": os.getenv('DEBUG', 'True').lower() != 'true',
+        "debug_off": os.environ.get('DEBUG', 'True').lower() != 'true',
     }
     
     all_ok = all(checks.values())
     
     return JsonResponse({
         "ready_for_production": all_ok,
+        "email_service": "Gmail SMTP",
         "checks": checks,
         "products": products,
         "recommendation": "🚀 Sistema listo para producción" if all_ok else "⚠️ Revisar checks fallidos"
     })
-

@@ -107,17 +107,28 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # ==============================================================================
-# EMAIL CONFIGURATION
+# EMAIL CONFIGURATION - Gmail SMTP
 # ==============================================================================
-# EMAIL CONFIGURATION
+# Configuración robusta para envío de emails vía Gmail
+# IMPORTANTE: En producción (Railway), configurar estas variables de entorno
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
 EMAIL_USE_SSL = False
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '') or EMAIL_HOST_USER
+
+# Validación de configuración crítica al iniciar
+import logging as _logging
+_startup_logger = _logging.getLogger('django.setup')
+
+if not EMAIL_HOST_USER:
+    _startup_logger.warning("⚠️ EMAIL_HOST_USER no configurado - El envío de emails fallará")
+if not EMAIL_HOST_PASSWORD:
+    _startup_logger.warning("⚠️ EMAIL_HOST_PASSWORD no configurado - El envío de emails fallará")
 
 # ==============================================================================
 # LOGGING (para ver errores en Railway)
