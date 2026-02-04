@@ -16,7 +16,7 @@ ARQUITECTURA STATELESS:
 IMPORTANTE PARA PRODUCCIÓN:
 - MP_ACCESS_TOKEN debe ser APP_USR-xxxx (no TEST-xxxx)
 - FRONTEND_URL debe apuntar al dominio de Vercel
-- RESEND_API_KEY debe estar configurada
+- EMAIL_HOST_USER y EMAIL_HOST_PASSWORD deben estar configuradas (Brevo SMTP)
 =============================================================================
 """
 
